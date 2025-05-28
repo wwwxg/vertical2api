@@ -143,11 +143,22 @@ def load_client_api_keys():
 def load_vertical_auth_tokens():
     global VERTICAL_AUTH_TOKENS
     try:
+        # 尝试从环境变量读取
+        env_tokens = os.getenv("VERTICAL_AUTH_TOKENS")
+        if env_tokens:
+            loaded_tokens = [token.strip().split("----")[0] for token in env_tokens.split(",")]
+            VERTICAL_AUTH_TOKENS = loaded_tokens
+            print(f"Loaded {len(VERTICAL_AUTH_TOKENS)} Vertical auth token(s) from environment variables.")
+            return
+
+        # 如果环境变量没有设置，则从文件读取
         with open("vertical.txt", "r", encoding="utf-8") as f: lines = f.readlines()
         loaded_tokens = [line.strip().split("----")[0] for line in lines if line.strip() and line.strip().split("----")]
         VERTICAL_AUTH_TOKENS = loaded_tokens
-        if not VERTICAL_AUTH_TOKENS: print("WARNING: No valid tokens found in vertical.txt.")
-        else: print(f"Loaded {len(VERTICAL_AUTH_TOKENS)} Vertical auth token(s).")
+        if not VERTICAL_AUTH_TOKENS:
+            print("WARNING: No valid tokens found in vertical.txt.")
+        else:
+            print(f"Loaded {len(VERTICAL_AUTH_TOKENS)} Vertical auth token(s) from file.")
     except FileNotFoundError:
         print("ERROR: vertical.txt not found.")
         VERTICAL_AUTH_TOKENS = []
