@@ -124,6 +124,15 @@ def load_models():
 def load_client_api_keys():
     global VALID_CLIENT_KEYS
     try:
+        # 尝试从环境变量读取
+        env_keys = os.getenv("CLIENT_API_KEYS")
+        if env_keys:
+            loaded_keys = [key.strip() for key in env_keys.split(",")]
+            VALID_CLIENT_KEYS = set(loaded_keys)
+            print(f"Loaded {len(VALID_CLIENT_KEYS)} client API key(s) from environment variables.")
+            return
+
+        # 如果环境变量没有设置，则从文件读取
         with open("client_api_keys.json", "r", encoding="utf-8") as f:
             keys = json.load(f)
             if not isinstance(keys, list):
@@ -131,8 +140,10 @@ def load_client_api_keys():
                 VALID_CLIENT_KEYS = set()
                 return
             VALID_CLIENT_KEYS = set(keys)
-            if not VALID_CLIENT_KEYS: print("WARNING: client_api_keys.json is empty.")
-            else: print(f"Loaded {len(VALID_CLIENT_KEYS)} client API key(s).")
+            if not VALID_CLIENT_KEYS:
+                print("WARNING: client_api_keys.json is empty.")
+            else:
+                print(f"Loaded {len(VALID_CLIENT_KEYS)} client API key(s).")
     except FileNotFoundError:
         print("ERROR: client_api_keys.json not found.")
         VALID_CLIENT_KEYS = set()
