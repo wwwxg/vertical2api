@@ -1,0 +1,13 @@
+{
+    "models": [
+        {
+            "url": "https://app.verticalstudio.ai/stream/models/claude-4-opus.data",
+            "modelId": "claude-4-opus-20250514"
+        },
+        {
+            "url": "https://app.verticalstudio.ai/stream/models/claude-4-sonnet.data",
+            "modelId": "claude-4-sonnet-20250514"
+        }
+    ]
+
+}
