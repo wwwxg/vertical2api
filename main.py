@@ -354,6 +354,31 @@ async def openai_stream_adapter(
         yield f"data: {error_resp_exc.model_dump_json(exclude_none=True)}\n\n"
         yield "data: [DONE]\n\n"
 
+async def clear_vertical_chat(chat_id: str, auth_token: str):
+    """
+    发送清除聊天记录的请求。
+    """
+    clear_url = "https://app.verticalstudio.ai/api/chat/archive.data"
+    headers = {
+        "User-Agent": USER_AGENT,
+        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+        "Origin": "https://app.verticalstudio.ai",
+        "Referer": f"https://app.verticalstudio.ai/chat/{chat_id}",
+        "Cookie": f"sb-ppdjlmajmpcqpkdmnzfd-auth-token={auth_token}"
+    }
+    data = {"chat": chat_id}
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(clear_url, headers=headers, data=data)
+            if response.status_code == 200:
+                print(f"[INFO] 聊天记录已成功清除：{chat_id}")
+            else:
+                print(f"[ERROR] 清除聊天记录失败：{response.status_code} - {response.text[:100]}")
+    except Exception as e:
+        print(f"[ERROR] 清除聊天记录时发生异常：{e}")
+
+
 async def aggregate_stream_for_non_stream_response(
     openai_sse_stream: AsyncGenerator[str, None], model_name: str
 ) -> ChatCompletionResponse:
