@@ -354,7 +354,7 @@ async def openai_stream_adapter(
         yield f"data: {error_resp_exc.model_dump_json(exclude_none=True)}\n\n"
         yield "data: [DONE]\n\n"
 
-async def clear_vertical_chat(chat_id: str, auth_token: str):
+async def clear_vertical_chat(chat_id: str, auth_token: str, vertical_model_id: str):
     """
     发送清除聊天记录的请求。
     """
@@ -518,7 +518,7 @@ async def chat_completions(
     )
     
     if CLEAR_CHAT_AFTER_RESPONSE and final_vertical_chat_id:
-        background_tasks.add_task(clear_vertical_chat, final_vertical_chat_id, auth_token)
+        background_tasks.add_task(clear_vertical_chat, final_vertical_chat_id, auth_token, vertical_model_id)
 
     if request.stream:
         return StreamingResponse(openai_sse_stream, media_type="text/event-stream")
