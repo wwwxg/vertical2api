@@ -5,7 +5,7 @@ import threading
 import hashlib
 from collections import OrderedDict
 from typing import Any, AsyncGenerator, Dict, List, Optional
-
+import os 
 import httpx
 import uvicorn
 from fastapi import FastAPI, HTTPException, Depends
@@ -444,7 +444,7 @@ async def chat_completions(request: ChatCompletionRequest, _: None = Depends(aut
         for conv_id, cached_data in reversed(list(conversation_cache.items())):
             if (cached_data["vertical_model_url"] == vertical_model_url and
                 cached_data["system_prompt_hash"] == current_system_prompt_hash and
-                cached_data["message_fingerprints"][:-1] == prefix_message_fingerprints):
+                cached_data["message_fingerprints"] == prefix_message_fingerprints):
                 matched_conv_id, cached_vertical_chat_id = conv_id, cached_data["vertical_chat_id"]
                 conversation_cache.move_to_end(conv_id)
                 break
