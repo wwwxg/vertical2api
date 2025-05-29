@@ -158,14 +158,14 @@ def load_vertical_auth_tokens():
         # 尝试从环境变量读取
         env_tokens = os.getenv("VERTICAL_AUTH_TOKENS")
         if env_tokens:
-            loaded_tokens = [token.strip().split("----")[0] for token in env_tokens.split(",")]
+            loaded_tokens = [parse_token_line(token.strip()) for token in env_tokens.split(",")]
             VERTICAL_AUTH_TOKENS = loaded_tokens
             print(f"Loaded {len(VERTICAL_AUTH_TOKENS)} Vertical auth token(s) from environment variables.")
             return
 
         # 如果环境变量没有设置，则从文件读取
         with open("vertical.txt", "r", encoding="utf-8") as f: lines = f.readlines()
-        loaded_tokens = [line.strip().split("----")[0] for line in lines if line.strip() and line.strip().split("----")]
+        loaded_tokens = [parse_token_line(line.strip()) for line in lines if line.strip()]
         VERTICAL_AUTH_TOKENS = loaded_tokens
         if not VERTICAL_AUTH_TOKENS:
             print("WARNING: No valid tokens found in vertical.txt.")
@@ -178,6 +178,51 @@ def load_vertical_auth_tokens():
         print(f"ERROR loading vertical.txt: {e}")
         VERTICAL_AUTH_TOKENS = []
 
+def parse_token_line(line: str) -> dict:
+    parts = line.split("----")
+    if len(parts) == 1:
+        return {"token": parts[0], "email": None, "password": None}
+    elif len(parts) >= 3:
+        return {
+            "token": parts[0],
+            "email": parts[1],
+            "password": parts[2]
+        }
+    else:
+        raise ValueError(f"Invalid token line format: {line}")
+
+async def refresh_auth_token(email: str, password: str) -> Optional[str]:
+    """
+    使用 email 和 password 自动登录并获取新的 auth-token。
+    """
+    async with httpx.AsyncClient() as client:
+        try:
+            # Step 1: 发送邮箱
+            resp1 = await client.post("https://app.verticalstudio.ai/login.data", data={"email": email})
+            if resp1.status_code != 200:
+                print(f"[ERROR] Failed to send email during login: {resp1.status_code}")
+                return None
+
+            # Step 2: 提交密码
+            login_url = f"https://app.verticalstudio.ai/login-password.data?email={httpx.URL(resp1.json()[1]).params['email']}"
+            resp2 = await client.post(login_url, data={"email": email, "password": password})
+
+            if resp2.status_code != 200:
+                print(f"[ERROR] Failed to login with email {email}: {resp2.status_code}")
+                return None
+
+            auth_token = resp2.cookies.get("sb-ppdjlmajmpcqpkdmnzfd-auth-token")
+            if not auth_token:
+                print(f"[ERROR] No auth-token found in response cookies for {email}.")
+                return None
+
+            print(f"[INFO] Successfully refreshed auth-token for {email}.")
+            return auth_token
+
+        except Exception as e:
+            print(f"[ERROR] Exception during token refresh: {e}")
+            return None
+
 def get_model_item(model_id: str) -> Optional[Dict]:
     return next((model for model in models_data.get("data", []) if model.get("id") == model_id), None)
 
@@ -187,13 +232,27 @@ async def authenticate_client(auth: Optional[HTTPAuthorizationCredentials] = Dep
         raise HTTPException(status_code=401, detail="API key required in Authorization header.", headers={"WWW-Authenticate": "Bearer"})
     if auth.credentials not in VALID_CLIENT_KEYS: raise HTTPException(status_code=403, detail="Invalid client API key.")
 
-def get_next_vertical_auth_token() -> str:
+async def get_next_vertical_auth_token() -> str:
     global current_vertical_token_index
-    if not VERTICAL_AUTH_TOKENS: raise HTTPException(status_code=503, detail="Service unavailable: Vertical auth tokens not configured.")
+    if not VERTICAL_AUTH_TOKENS:
+        raise HTTPException(status_code=503, detail="Service unavailable: Vertical auth tokens not configured.")
+
     with token_rotation_lock:
-        token_to_use = VERTICAL_AUTH_TOKENS[current_vertical_token_index]
+        account = VERTICAL_AUTH_TOKENS[current_vertical_token_index]
         current_vertical_token_index = (current_vertical_token_index + 1) % len(VERTICAL_AUTH_TOKENS)
-    return token_to_use
+
+    if account["token"]:
+        return account["token"]
+
+    if not account["email"] or not account["password"]:
+        raise HTTPException(status_code=503, detail="Token missing and no credentials available for refresh.")
+
+    new_token = await refresh_auth_token(account["email"], account["password"])
+    if not new_token:
+        raise HTTPException(status_code=503, detail="Failed to refresh auth token.")
+
+    account["token"] = new_token
+    return new_token
 
 @app.on_event("startup")
 async def startup():
