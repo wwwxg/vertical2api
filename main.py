@@ -8,7 +8,7 @@ from typing import Any, AsyncGenerator, Dict, List, Optional
 import os 
 import httpx
 import uvicorn
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
@@ -18,6 +18,7 @@ from vertical_client import VerticalApiClient
 # Configuration
 CONVERSATION_CACHE_MAX_SIZE = 100
 DEFAULT_REQUEST_TIMEOUT = 30.0
+CLEAR_CHAT_AFTER_RESPONSE = os.getenv("CLEAR_CHAT_AFTER_RESPONSE", "false").lower() == "true"
 
 # Global variables
 VALID_CLIENT_KEYS: set = set()
@@ -408,7 +409,11 @@ async def aggregate_stream_for_non_stream_response(
     )
 
 @app.post("/v1/chat/completions")
-async def chat_completions(request: ChatCompletionRequest, _: None = Depends(authenticate_client)):
+async def chat_completions(
+    request: ChatCompletionRequest,
+    background_tasks: BackgroundTasks,
+    _: None = Depends(authenticate_client)
+):
     model_config = get_model_item(request.model)
     if not model_config: raise HTTPException(status_code=404, detail=f"Model {request.model} not found")
     
@@ -487,6 +492,9 @@ async def chat_completions(request: ChatCompletionRequest, _: None = Depends(aut
         current_system_prompt_hash, vertical_model_url
     )
     
+    if CLEAR_CHAT_AFTER_RESPONSE and final_vertical_chat_id:
+        background_tasks.add_task(clear_vertical_chat, final_vertical_chat_id, auth_token)
+
     if request.stream:
         return StreamingResponse(openai_sse_stream, media_type="text/event-stream")
     else:
