@@ -358,12 +358,19 @@ async def clear_vertical_chat(chat_id: str, auth_token: str, vertical_model_id: 
     """
     发送清除聊天记录的请求。
     """
+    # 映射完整模型 ID 到简写
+    MODEL_SHORT_NAMES = {
+        "claude-4-sonnet-20250514": "claude-4-sonnet",
+        "claude-3-7-sonnet-20250219": "claude-3-7-sonnet",
+    }
+    short_model_name = MODEL_SHORT_NAMES.get(vertical_model_id, vertical_model_id.split("-")[0])  # 默认取前缀
+
     clear_url = "https://app.verticalstudio.ai/api/chat/archive.data"
     headers = {
         "User-Agent": USER_AGENT,
         "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
         "Origin": "https://app.verticalstudio.ai",
-        "Referer": f"https://app.verticalstudio.ai/stream/models/{vertical_model_id}/{chat_id}",
+        "Referer": f"https://app.verticalstudio.ai/stream/models/{short_model_name}/{chat_id}",
         "Cookie": f"sb-ppdjlmajmpcqpkdmnzfd-auth-token={auth_token}"
     }
     data = {"chat": chat_id}
