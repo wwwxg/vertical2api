@@ -363,7 +363,7 @@ async def clear_vertical_chat(chat_id: str, auth_token: str, vertical_model_id: 
         "User-Agent": USER_AGENT,
         "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
         "Origin": "https://app.verticalstudio.ai",
-        "Referer": f"https://app.verticalstudio.ai/stream/models/{vertical_model_id}/chat/{chat_id}",
+        "Referer": f"https://app.verticalstudio.ai/stream/models/{vertical_model_id}/{chat_id}",
         "Cookie": f"sb-ppdjlmajmpcqpkdmnzfd-auth-token={auth_token}"
     }
     data = {"chat": chat_id}
