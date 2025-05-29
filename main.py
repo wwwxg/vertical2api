@@ -560,6 +560,7 @@ async def chat_completions(
     else:
         is_new_cached_conversation = True
         if not vertical_api_client: raise HTTPException(status_code=500, detail="Vertical API client not initialized.")
+        auth_token = await get_next_vertical_auth_token()
         new_chat_id = await vertical_api_client.get_chat_id(vertical_model_url, auth_token)
         if not new_chat_id: raise HTTPException(status_code=500, detail="Failed to get chat_id from Vertical API.")
         final_vertical_chat_id = new_chat_id
