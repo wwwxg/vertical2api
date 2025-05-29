@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 
-from vertical_client import VerticalApiClient
+from vertical_client import VerticalApiClient, USER_AGENT
 
 # Configuration
 CONVERSATION_CACHE_MAX_SIZE = 100
