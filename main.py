@@ -254,32 +254,39 @@ async def authenticate_client(auth: Optional[HTTPAuthorizationCredentials] = Dep
         raise HTTPException(status_code=401, detail="API key required in Authorization header.", headers={"WWW-Authenticate": "Bearer"})
     if auth.credentials not in VALID_CLIENT_KEYS: raise HTTPException(status_code=403, detail="Invalid client API key.")
 
-async def get_next_vertical_auth_token() -> str:
+async def get_next_vertical_auth_token(failed_email: str = None) -> str:
     global current_vertical_token_index
-    if not VERTICAL_AUTH_TOKENS:
-        raise HTTPException(status_code=503, detail="Service unavailable: Vertical auth tokens not configured.")
 
-    # 尝试所有账号，找到一个有效的token
+    # 优先刷新失败的账户
+    if failed_email:
+        for account in VERTICAL_AUTH_TOKENS:
+            if account["email"] == failed_email and account["password"]:
+                print(f"[DEBUG] Refreshing failed account: {failed_email}")
+                new_token = await refresh_auth_token(account["email"], account["password"])
+                if new_token:
+                    account["token"] = new_token
+                    print(f"[INFO] Successfully refreshed token for account: {failed_email}")
+                    return new_token
+
+    # 正常轮换机制
     attempts = 0
     max_attempts = len(VERTICAL_AUTH_TOKENS)
     
     while attempts < max_attempts:
         with token_rotation_lock:
             account = VERTICAL_AUTH_TOKENS[current_vertical_token_index]
-            account_index = current_vertical_token_index  # 记住当前账号的索引
+            account_index = current_vertical_token_index
             current_vertical_token_index = (current_vertical_token_index + 1) % len(VERTICAL_AUTH_TOKENS)
-        
-        # 如果当前账号有有效token，直接返回
+
         if account["token"]:
             print(f"[DEBUG] Using existing token for account index {account_index}, 邮箱: {account.get('email', 'N/A')}")
             return account["token"]
-        
-        # 如果当前账号token为空，尝试刷新这个账号本身
+
         print(f"[DEBUG] Token empty for account index {account_index}. Attempting to refresh this account...")
         if account["email"] and account["password"]:
             new_token = await refresh_auth_token(account["email"], account["password"])
             if new_token:
-                account["token"] = new_token  # 更新当前账号的token
+                account["token"] = new_token
                 print(f"[INFO] Successfully refreshed token for account index {account_index}.")
                 return new_token
             else:
@@ -288,8 +295,17 @@ async def get_next_vertical_auth_token() -> str:
             print(f"[ERROR] Account index {account_index} missing email or password for refresh.")
         
         attempts += 1
-    
-    # 如果所有账号都无法获取有效token
+
+    # 最终兜底：尝试刷新第一个可用凭证的账户
+    for account in VERTICAL_AUTH_TOKENS:
+        if account["email"] and account["password"]:
+            print(f"[DEBUG] Trying fallback refresh on account: {account['email']}")
+            new_token = await refresh_auth_token(account["email"], account["password"])
+            if new_token:
+                account["token"] = new_token
+                print(f"[INFO] Successfully refreshed token via fallback for account: {account['email']}")
+                return new_token
+
     raise HTTPException(status_code=503, detail="All auth tokens failed and no valid credentials available for refresh.")
 
 @app.on_event("startup")
@@ -600,31 +616,26 @@ async def chat_completions(
         if not vertical_api_client: raise HTTPException(status_code=500, detail="Vertical API client not initialized.")
         auth_token = await get_next_vertical_auth_token()
         # 找到当前token对应的账户邮箱
+        auth_token = await get_next_vertical_auth_token()
         current_account_email = "Unknown"
         for account in VERTICAL_AUTH_TOKENS:
             if account["token"] == auth_token:
                 current_account_email = account.get("email", "Unknown")
                 break
-        
+    
         new_chat_id = await vertical_api_client.get_chat_id(vertical_model_url, auth_token, current_account_email)
         if not new_chat_id:
             print(f"[INFO] Chat ID 为空，尝试刷新 token。当前使用的token: {auth_token[:20]}...")
-            account = VERTICAL_AUTH_TOKENS[current_vertical_token_index]
-            print(f"[DEBUG] 准备刷新的账户索引: {current_vertical_token_index}, 邮箱: {account.get('email', 'N/A')}")
-            if account["email"] and account["password"]:
-                new_token = await refresh_auth_token(account["email"], account["password"])
-                if new_token:
-                    account["token"] = new_token
-                    auth_token = new_token
-                    # 重新获取当前账户邮箱信息
+            auth_token = await get_next_vertical_auth_token(current_account_email)  # 强制刷新当前账户
+            # 重新获取当前账户邮箱信息
+            current_account_email = "Unknown"
+            for account in VERTICAL_AUTH_TOKENS:
+                if account["token"] == auth_token:
                     current_account_email = account.get("email", "Unknown")
-                    new_chat_id = await vertical_api_client.get_chat_id(vertical_model_url, auth_token, current_account_email)
-                    if not new_chat_id:
-                        raise HTTPException(status_code=500, detail="Failed to get chat_id after token refresh.")
-                else:
-                    raise HTTPException(status_code=500, detail="Failed to refresh auth token.")
-            else:
-                raise HTTPException(status_code=500, detail="Token missing and no credentials available for refresh.")
+                    break
+            new_chat_id = await vertical_api_client.get_chat_id(vertical_model_url, auth_token, current_account_email)
+            if not new_chat_id:
+                raise HTTPException(status_code=500, detail="Failed to get chat_id after token refresh.")
         final_vertical_chat_id = new_chat_id
         print(f"Created new Vertical chat_id: {final_vertical_chat_id} for model {request.model}")
         
