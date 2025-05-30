@@ -197,17 +197,29 @@ async def refresh_auth_token(email: str, password: str) -> Optional[str]:
     """
     使用 email 和 password 自动登录并获取新的 auth-token。
     """
-    print(f"[DEBUG] 正在尝试自动登录：{email}")  # <<< 新增日志
+    print(f"[DEBUG] 正在尝试自动登录：{email}")
     async with httpx.AsyncClient() as client:
         try:
             # Step 1: 发送邮箱
             resp1 = await client.post("https://app.verticalstudio.ai/login.data", data={"email": email})
-            if resp1.status_code != 200:
+            if resp1.status_code not in [200, 202]:
                 print(f"[ERROR] Failed to send email during login: {resp1.status_code}")
                 return None
 
-            # Step 2: 提交密码
-            login_url = f"https://app.verticalstudio.ai/login-password.data?email={httpx.URL(resp1.json()[1]).params['email']}"
+            # Step 2: 获取下一步URL并提交密码
+            if resp1.status_code == 202:
+                location = resp1.headers.get("location")
+                if location:
+                    login_url = f"https://app.verticalstudio.ai{location}"
+                    print(f"[DEBUG] Using location from 202 response: {login_url}")
+                else:
+                    print(f"[ERROR] No location header in 202 response")
+                    return None
+            else:
+                # 原有逻辑保持不变（适用于200响应）
+                login_url = f"https://app.verticalstudio.ai/login-password.data?email={httpx.URL(resp1.json()[1]).params['email']}"
+                print(f"[DEBUG] Using original logic for 200 response: {login_url}")
+            
             resp2 = await client.post(login_url, data={"email": email, "password": password})
 
             if resp2.status_code != 200:
@@ -225,9 +237,6 @@ async def refresh_auth_token(email: str, password: str) -> Optional[str]:
         except Exception as e:
             print(f"[ERROR] Exception during token refresh: {e}")
             return None
-
-        print(f"[DEBUG] 自动登录成功：{email}")  # <<< 新增日志
-        return auth_token
 
 def get_model_item(model_id: str) -> Optional[Dict]:
     return next((model for model in models_data.get("data", []) if model.get("id") == model_id), None)
