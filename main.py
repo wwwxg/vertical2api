@@ -181,8 +181,10 @@ def load_vertical_auth_tokens():
 def parse_token_line(line: str) -> dict:
     parts = line.split("----")
     if len(parts) == 1:
+        print(f"[DEBUG] Token line has only token: {parts[0]}")  # <<< 新增日志
         return {"token": parts[0], "email": None, "password": None}
     elif len(parts) >= 3:
+        print(f"[DEBUG] Loaded token with email & password: {parts[0]} ---- {parts[1]}")  # <<< 新增日志
         return {
             "token": parts[0],
             "email": parts[1],
@@ -246,9 +248,12 @@ async def get_next_vertical_auth_token() -> str:
         current_vertical_token_index = (current_vertical_token_index + 1) % len(VERTICAL_AUTH_TOKENS)
 
     if account["token"]:
+        print(f"[DEBUG] Using existing token for request.")  # <<< 新增日志
         return account["token"]
 
+    print(f"[DEBUG] No valid token found. Attempting to refresh...")  # <<< 新增日志
     if not account["email"] or not account["password"]:
+        print(f"[ERROR] Missing email or password for token refresh.")  # <<< 新增日志
         raise HTTPException(status_code=503, detail="Token missing and no credentials available for refresh.")
 
     new_token = await refresh_auth_token(account["email"], account["password"])
