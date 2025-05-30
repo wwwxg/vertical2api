@@ -271,7 +271,7 @@ async def get_next_vertical_auth_token() -> str:
         
         # 如果当前账号有有效token，直接返回
         if account["token"]:
-            print(f"[DEBUG] Using existing token for account index {account_index}.")
+            print(f"[DEBUG] Using existing token for account index {account_index}, 邮箱: {account.get('email', 'N/A')}")
             return account["token"]
         
         # 如果当前账号token为空，尝试刷新这个账号本身
@@ -601,8 +601,9 @@ async def chat_completions(
         auth_token = await get_next_vertical_auth_token()
         new_chat_id = await vertical_api_client.get_chat_id(vertical_model_url, auth_token)
         if not new_chat_id:
-            print("[INFO] Chat ID 为空，尝试刷新 token")
+            print(f"[INFO] Chat ID 为空，尝试刷新 token。当前使用的token: {auth_token[:20]}...")
             account = VERTICAL_AUTH_TOKENS[current_vertical_token_index]
+            print(f"[DEBUG] 准备刷新的账户索引: {current_vertical_token_index}, 邮箱: {account.get('email', 'N/A')}")
             if account["email"] and account["password"]:
                 new_token = await refresh_auth_token(account["email"], account["password"])
                 if new_token:

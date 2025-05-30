@@ -68,6 +68,7 @@ class VerticalApiClient:
             if chat_id_to_return: return chat_id_to_return
 
             print(f"[VCLIENT_ERROR] get_chat_id: Failed to extract chat_id. Final status: {response.status_code}, Response text: {response.text[:200]}")
+            print(f"[VCLIENT_DEBUG] 失效的token (前20位): {auth_token[:20]}...")
             if response.status_code >= 400: response.raise_for_status() # Raise for client/server errors if not handled
             return None
 
