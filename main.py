@@ -259,25 +259,38 @@ async def get_next_vertical_auth_token() -> str:
     if not VERTICAL_AUTH_TOKENS:
         raise HTTPException(status_code=503, detail="Service unavailable: Vertical auth tokens not configured.")
 
-    with token_rotation_lock:
-        account = VERTICAL_AUTH_TOKENS[current_vertical_token_index]
-        current_vertical_token_index = (current_vertical_token_index + 1) % len(VERTICAL_AUTH_TOKENS)
-
-    if account["token"]:
-        print(f"[DEBUG] Using existing token for request.")  # <<< 新增日志
-        return account["token"]
-
-    print(f"[DEBUG] No valid token found. Attempting to refresh...")  # <<< 新增日志
-    if not account["email"] or not account["password"]:
-        print(f"[ERROR] Missing email or password for token refresh.")  # <<< 新增日志
-        raise HTTPException(status_code=503, detail="Token missing and no credentials available for refresh.")
-
-    new_token = await refresh_auth_token(account["email"], account["password"])
-    if not new_token:
-        raise HTTPException(status_code=503, detail="Failed to refresh auth token.")
-
-    account["token"] = new_token
-    return new_token
+    # 尝试所有账号，找到一个有效的token
+    attempts = 0
+    max_attempts = len(VERTICAL_AUTH_TOKENS)
+    
+    while attempts < max_attempts:
+        with token_rotation_lock:
+            account = VERTICAL_AUTH_TOKENS[current_vertical_token_index]
+            account_index = current_vertical_token_index  # 记住当前账号的索引
+            current_vertical_token_index = (current_vertical_token_index + 1) % len(VERTICAL_AUTH_TOKENS)
+        
+        # 如果当前账号有有效token，直接返回
+        if account["token"]:
+            print(f"[DEBUG] Using existing token for account index {account_index}.")
+            return account["token"]
+        
+        # 如果当前账号token为空，尝试刷新这个账号本身
+        print(f"[DEBUG] Token empty for account index {account_index}. Attempting to refresh this account...")
+        if account["email"] and account["password"]:
+            new_token = await refresh_auth_token(account["email"], account["password"])
+            if new_token:
+                account["token"] = new_token  # 更新当前账号的token
+                print(f"[INFO] Successfully refreshed token for account index {account_index}.")
+                return new_token
+            else:
+                print(f"[ERROR] Failed to refresh token for account index {account_index}.")
+        else:
+            print(f"[ERROR] Account index {account_index} missing email or password for refresh.")
+        
+        attempts += 1
+    
+    # 如果所有账号都无法获取有效token
+    raise HTTPException(status_code=503, detail="All auth tokens failed and no valid credentials available for refresh.")
 
 @app.on_event("startup")
 async def startup():
