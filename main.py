@@ -195,6 +195,7 @@ async def refresh_auth_token(email: str, password: str) -> Optional[str]:
     """
     使用 email 和 password 自动登录并获取新的 auth-token。
     """
+    print(f"[DEBUG] 正在尝试自动登录：{email}")  # <<< 新增日志
     async with httpx.AsyncClient() as client:
         try:
             # Step 1: 发送邮箱
@@ -222,6 +223,9 @@ async def refresh_auth_token(email: str, password: str) -> Optional[str]:
         except Exception as e:
             print(f"[ERROR] Exception during token refresh: {e}")
             return None
+
+        print(f"[DEBUG] 自动登录成功：{email}")  # <<< 新增日志
+        return auth_token
 
 def get_model_item(model_id: str) -> Optional[Dict]:
     return next((model for model in models_data.get("data", []) if model.get("id") == model_id), None)
