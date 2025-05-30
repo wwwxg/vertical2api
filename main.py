@@ -210,7 +210,8 @@ async def refresh_auth_token(email: str, password: str) -> Optional[str]:
             if resp1.status_code == 202:
                 location = resp1.headers.get("location")
                 if location:
-                    login_url = f"https://app.verticalstudio.ai{location}"
+                    # 从location构造完整的URL（包含email参数）
+                    login_url = f"https://app.verticalstudio.ai{location}.data"
                     print(f"[DEBUG] Using location from 202 response: {login_url}")
                 else:
                     print(f"[ERROR] No location header in 202 response")
@@ -222,13 +223,15 @@ async def refresh_auth_token(email: str, password: str) -> Optional[str]:
             
             resp2 = await client.post(login_url, data={"email": email, "password": password})
 
-            if resp2.status_code != 200:
+            # ✅ 关键修复：202状态码是成功的！
+            if resp2.status_code not in [200, 202]:
                 print(f"[ERROR] Failed to login with email {email}: {resp2.status_code}")
                 return None
 
             auth_token = resp2.cookies.get("sb-ppdjlmajmpcqpkdmnzfd-auth-token")
             if not auth_token:
                 print(f"[ERROR] No auth-token found in response cookies for {email}.")
+                print(f"[DEBUG] Response status: {resp2.status_code}, cookies: {dict(resp2.cookies)}")
                 return None
 
             print(f"[INFO] Successfully refreshed auth-token for {email}.")
