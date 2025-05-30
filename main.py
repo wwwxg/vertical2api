@@ -517,7 +517,7 @@ async def chat_completions(
     model_config = get_model_item(request.model)
     if not model_config: raise HTTPException(status_code=404, detail=f"Model {request.model} not found")
     
-    auth_token = get_next_vertical_auth_token()
+    auth_token = await get_next_vertical_auth_token()
     vertical_model_id = model_config.get("vertical_model_id")
     vertical_model_url = model_config.get("vertical_model_url")
     output_reasoning_active = model_config.get("output_reasoning_flag", False)
@@ -571,7 +571,21 @@ async def chat_completions(
         if not vertical_api_client: raise HTTPException(status_code=500, detail="Vertical API client not initialized.")
         auth_token = await get_next_vertical_auth_token()
         new_chat_id = await vertical_api_client.get_chat_id(vertical_model_url, auth_token)
-        if not new_chat_id: raise HTTPException(status_code=500, detail="Failed to get chat_id from Vertical API.")
+        if not new_chat_id:
+            print("[INFO] Chat ID 为空，尝试刷新 token")
+            account = VERTICAL_AUTH_TOKENS[current_vertical_token_index]
+            if account["email"] and account["password"]:
+                new_token = await refresh_auth_token(account["email"], account["password"])
+                if new_token:
+                    account["token"] = new_token
+                    auth_token = new_token
+                    new_chat_id = await vertical_api_client.get_chat_id(vertical_model_url, auth_token)
+                    if not new_chat_id:
+                        raise HTTPException(status_code=500, detail="Failed to get chat_id after token refresh.")
+                else:
+                    raise HTTPException(status_code=500, detail="Failed to refresh auth token.")
+            else:
+                raise HTTPException(status_code=500, detail="Token missing and no credentials available for refresh.")
         final_vertical_chat_id = new_chat_id
         print(f"Created new Vertical chat_id: {final_vertical_chat_id} for model {request.model}")
         
