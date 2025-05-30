@@ -614,8 +614,6 @@ async def chat_completions(
         is_new_cached_conversation = True
         if not vertical_api_client: raise HTTPException(status_code=500, detail="Vertical API client not initialized.")
         auth_token = await get_next_vertical_auth_token()
-        # 找到当前token对应的账户邮箱
-        auth_token = await get_next_vertical_auth_token()
         current_account_email = "Unknown"
         for account in VERTICAL_AUTH_TOKENS:
             if account["token"] == auth_token:
