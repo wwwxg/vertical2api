@@ -562,7 +562,6 @@ async def chat_completions(
     model_config = get_model_item(request.model)
     if not model_config: raise HTTPException(status_code=404, detail=f"Model {request.model} not found")
     
-    auth_token = await get_next_vertical_auth_token()
     vertical_model_id = model_config.get("vertical_model_id")
     vertical_model_url = model_config.get("vertical_model_url")
     output_reasoning_active = model_config.get("output_reasoning_flag", False)
