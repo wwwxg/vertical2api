@@ -20,7 +20,7 @@ class VerticalApiClient:
     def _get_iso_timestamp(self) -> str:
         return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
-    async def get_chat_id(self, model_data_url: str, auth_token: str) -> Optional[str]:
+    async def get_chat_id(self, model_data_url: str, auth_token: str, account_email: str = "Unknown") -> Optional[str]:
         headers = {
             "Cookie": f"sb-ppdjlmajmpcqpkdmnzfd-auth-token={auth_token}",
             "User-Agent": USER_AGENT, "Accept": "text/plain,*/*;q=0.8",
@@ -68,7 +68,7 @@ class VerticalApiClient:
             if chat_id_to_return: return chat_id_to_return
 
             print(f"[VCLIENT_ERROR] get_chat_id: Failed to extract chat_id. Final status: {response.status_code}, Response text: {response.text[:200]}")
-            print(f"[VCLIENT_DEBUG] 失效的token (前20位): {auth_token[:20]}...")
+            print(f"[VCLIENT_DEBUG] 失效的token对应邮箱: {account_email}")
             if response.status_code >= 400: response.raise_for_status() # Raise for client/server errors if not handled
             return None
 

@@ -599,7 +599,14 @@ async def chat_completions(
         is_new_cached_conversation = True
         if not vertical_api_client: raise HTTPException(status_code=500, detail="Vertical API client not initialized.")
         auth_token = await get_next_vertical_auth_token()
-        new_chat_id = await vertical_api_client.get_chat_id(vertical_model_url, auth_token)
+        # 找到当前token对应的账户邮箱
+        current_account_email = "Unknown"
+        for account in VERTICAL_AUTH_TOKENS:
+            if account["token"] == auth_token:
+                current_account_email = account.get("email", "Unknown")
+                break
+        
+        new_chat_id = await vertical_api_client.get_chat_id(vertical_model_url, auth_token, current_account_email)
         if not new_chat_id:
             print(f"[INFO] Chat ID 为空，尝试刷新 token。当前使用的token: {auth_token[:20]}...")
             account = VERTICAL_AUTH_TOKENS[current_vertical_token_index]
@@ -609,7 +616,9 @@ async def chat_completions(
                 if new_token:
                     account["token"] = new_token
                     auth_token = new_token
-                    new_chat_id = await vertical_api_client.get_chat_id(vertical_model_url, auth_token)
+                    # 重新获取当前账户邮箱信息
+                    current_account_email = account.get("email", "Unknown")
+                    new_chat_id = await vertical_api_client.get_chat_id(vertical_model_url, auth_token, current_account_email)
                     if not new_chat_id:
                         raise HTTPException(status_code=500, detail="Failed to get chat_id after token refresh.")
                 else:
