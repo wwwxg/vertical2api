@@ -210,8 +210,12 @@ async def refresh_auth_token(email: str, password: str) -> Optional[str]:
             if resp1.status_code == 202:
                 location = resp1.headers.get("location")
                 if location:
-                    # 从location构造完整的URL（包含email参数）
-                    login_url = f"https://app.verticalstudio.ai{location}.data"
+                    # 正确的URL构造：在query参数前插入.data
+                    if "?" in location:
+                        base_path, query_params = location.split("?", 1)
+                        login_url = f"https://app.verticalstudio.ai{base_path}.data?{query_params}"
+                    else:
+                        login_url = f"https://app.verticalstudio.ai{location}.data"
                     print(f"[DEBUG] Using location from 202 response: {login_url}")
                 else:
                     print(f"[ERROR] No location header in 202 response")
