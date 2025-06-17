@@ -36,50 +36,34 @@ class VerticalApiClient:
             # print(f"[VCLIENT_DEBUG] get_chat_id: Response status: {response.status_code}")
 
             chat_id_to_return = None
-            if response.status_code == 202: # Typically indicates chat creation
-                try:
-                    # First, try to parse as JSON array
-                    json_data = response.json()
-                    if isinstance(json_data, list) and len(json_data) >= 4:
-                        redirect_url = json_data[3]
-                        if isinstance(redirect_url, str) and "/stream/models/" in redirect_url:
-                            # Extract the last part of the path as chat_id
-                            path_segments = redirect_url.rstrip('/').split('/')
-                            potential_chat_id = path_segments[-1] if path_segments else None
-                            if potential_chat_id:
-                                chat_id_to_return = potential_chat_id
-                                # print(f"[VCLIENT_DEBUG] get_chat_id: Success from 202 JSON response: {chat_id_to_return}")
-                except (json.JSONDecodeError, IndexError, TypeError, AttributeError):
-                    # If JSON parse fails, fallback to Location header
-                    pass
-            
-                # If JSON didn't give us a chat_id, try Location header
-                if not chat_id_to_return:
-                    location_header = response.headers.get("Location")
-                    if location_header:
-                        # Extract the last part of the path as chat_id
-                        path_segments = location_header.rstrip('/').split('/')
-                        potential_chat_id = path_segments[-1] if path_segments else None
-                        if potential_chat_id:
-                            chat_id_to_return = potential_chat_id
-                            # print(f"[VCLIENT_DEBUG] get_chat_id: Success from 202 Location header: {chat_id_to_return}")
+            if response.status_code == 202: # Typically indicates chat creation, Location header has the ID
+                location_header = response.headers.get("Location")
+                if location_header:
+                    parsed_url = urlparse(location_header)
+                    path_segments = parsed_url.path.strip('/').split('/')
+                    potential_chat_id = path_segments[-1] if path_segments else None
+                    if potential_chat_id and potential_chat_id.startswith("cmb"):
+                        chat_id_to_return = potential_chat_id
+                        # print(f"[VCLIENT_DEBUG] get_chat_id: Success from 202 Location: {chat_id_to_return}")
+                # else: print(f"[VCLIENT_WARN] get_chat_id: Status 202 but no Location header.")
             elif response.history: # Followed redirects
                 initial_redirect_response = response.history[0]
                 if initial_redirect_response.is_redirect:
                     location_header_hist = initial_redirect_response.headers.get("Location")
                     if location_header_hist:
-                        # Extract the last part of the path as chat_id
-                        path_segments = location_header_hist.rstrip('/').split('/')
-                        potential_chat_id = path_segments[-1] if path_segments else None
-                        if potential_chat_id:
-                            chat_id_to_return = potential_chat_id
+                        parsed_url_hist = urlparse(location_header_hist)
+                        path_segments_hist = parsed_url_hist.path.strip('/').split('/')
+                        potential_chat_id_hist = path_segments_hist[-1] if path_segments_hist else None
+                        if potential_chat_id_hist and potential_chat_id_hist.startswith("cmb"):
+                            chat_id_to_return = potential_chat_id_hist
                             # print(f"[VCLIENT_DEBUG] get_chat_id: Success from redirect history: {chat_id_to_return}")
+                    # else: print("[VCLIENT_WARN] get_chat_id: Redirect but no Location in history.")
             elif response.status_code == 200: # Direct response (less common for new chat ID)
                 response_text_direct = response.text.strip()
-                # Accept any non-empty string without spaces as chat_id
-                if response_text_direct and ' ' not in response_text_direct:
+                if response_text_direct.startswith("cmb"):
                     chat_id_to_return = response_text_direct
                     # print(f"[VCLIENT_DEBUG] get_chat_id: Success from 200 response body: {chat_id_to_return}")
+                # else: print(f"[VCLIENT_WARN] get_chat_id: Status 200 but body not a chat_id: '{response_text_direct[:100]}'")
             
             if chat_id_to_return: return chat_id_to_return
 
