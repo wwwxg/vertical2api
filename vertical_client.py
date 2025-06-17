@@ -37,15 +37,29 @@ class VerticalApiClient:
 
             chat_id_to_return = None
             if response.status_code == 202: # Typically indicates chat creation, Location header has the ID
-                location_header = response.headers.get("Location")
-                if location_header:
-                    parsed_url = urlparse(location_header)
-                    path_segments = parsed_url.path.strip('/').split('/')
-                    potential_chat_id = path_segments[-1] if path_segments else None
-                    if potential_chat_id and potential_chat_id.startswith("cmb"):
-                        chat_id_to_return = potential_chat_id
-                        # print(f"[VCLIENT_DEBUG] get_chat_id: Success from 202 Location: {chat_id_to_return}")
-                # else: print(f"[VCLIENT_WARN] get_chat_id: Status 202 but no Location header.")
+                try:
+                    # New strategy: First try to parse chat_id from JSON body
+                    data = json.loads(response.text)
+                    if isinstance(data, list) and len(data) >= 4 and isinstance(data[3], str):
+                        redirect_url = data[3]
+                        parsed_url = urlparse(redirect_url)
+                        path_segments = parsed_url.path.strip('/').split('/')
+                        potential_chat_id = path_segments[-1] if path_segments else None
+                        if potential_chat_id and potential_chat_id.startswith("cm"):
+                            chat_id_to_return = potential_chat_id
+                except (json.JSONDecodeError, IndexError, TypeError):
+                    pass # Fallback to header check
+
+                # Fallback strategy: Check Location header if not found in body
+                if not chat_id_to_return:
+                    location_header = response.headers.get("Location")
+                    if location_header:
+                        parsed_url = urlparse(location_header)
+                        path_segments = parsed_url.path.strip('/').split('/')
+                        potential_chat_id = path_segments[-1] if path_segments else None
+                        if potential_chat_id and potential_chat_id.startswith("cm"):
+                            chat_id_to_return = potential_chat_id
+                            # print(f"[VCLIENT_DEBUG] get_chat_id: Success from 202 Location header: {chat_id_to_return}")
             elif response.history: # Followed redirects
                 initial_redirect_response = response.history[0]
                 if initial_redirect_response.is_redirect:
@@ -54,13 +68,13 @@ class VerticalApiClient:
                         parsed_url_hist = urlparse(location_header_hist)
                         path_segments_hist = parsed_url_hist.path.strip('/').split('/')
                         potential_chat_id_hist = path_segments_hist[-1] if path_segments_hist else None
-                        if potential_chat_id_hist and potential_chat_id_hist.startswith("cmb"):
+                        if potential_chat_id_hist and potential_chat_id_hist.startswith("cm"):
                             chat_id_to_return = potential_chat_id_hist
                             # print(f"[VCLIENT_DEBUG] get_chat_id: Success from redirect history: {chat_id_to_return}")
                     # else: print("[VCLIENT_WARN] get_chat_id: Redirect but no Location in history.")
             elif response.status_code == 200: # Direct response (less common for new chat ID)
                 response_text_direct = response.text.strip()
-                if response_text_direct.startswith("cmb"):
+                if response_text_direct.startswith("cm"):
                     chat_id_to_return = response_text_direct
                     # print(f"[VCLIENT_DEBUG] get_chat_id: Success from 200 response body: {chat_id_to_return}")
                 # else: print(f"[VCLIENT_WARN] get_chat_id: Status 200 but body not a chat_id: '{response_text_direct[:100]}'")
