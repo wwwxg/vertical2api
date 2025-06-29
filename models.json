@@ -15,6 +15,10 @@
         {
             "url": "https://app.verticalstudio.ai/stream/models/claude-4-opus.data",
             "modelId": "claude-4-opus-20250514"
+        },
+        {
+            "url": "https://app.verticalstudio.ai/stream/models/o3.data",
+            "modelId": "o3"
         }
     ]
 
